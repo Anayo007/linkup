@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import pusherServer, { getMatchChannel, getUserChannel, PUSHER_EVENTS } from '@/lib/pusher';
 
 export async function GET(
   request: NextRequest,
@@ -105,6 +106,29 @@ export async function POST(
     await prisma.match.update({
       where: { id: matchId },
       data: { lastMessageAt: new Date() },
+    });
+
+    // Get sender's profile for the notification
+    const senderProfile = await prisma.profile.findUnique({
+      where: { userId: user.id },
+      select: { name: true },
+    });
+
+    // Trigger real-time event to the match channel
+    await pusherServer.trigger(getMatchChannel(matchId), PUSHER_EVENTS.NEW_MESSAGE, {
+      message: {
+        ...message,
+        senderName: senderProfile?.name || 'Someone',
+      },
+    });
+
+    // Also notify the other user's personal channel (for notifications when not in chat)
+    await pusherServer.trigger(getUserChannel(otherUserId), PUSHER_EVENTS.NEW_MESSAGE, {
+      matchId,
+      message: {
+        ...message,
+        senderName: senderProfile?.name || 'Someone',
+      },
     });
 
     return NextResponse.json({ message });

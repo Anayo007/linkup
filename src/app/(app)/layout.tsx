@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Compass, Heart, Star, MessageCircle, User } from 'lucide-react';
+import NotificationProvider from '@/components/NotificationProvider';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -20,6 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const showNav = !isIndividualChat;
 
   return (
+    <NotificationProvider>
     <div className="min-h-screen bg-gray-50 pb-20">
       {children}
       
@@ -47,5 +49,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
       )}
     </div>
+    </NotificationProvider>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, useRef, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Send, MoreVertical, Flag, Ban, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useChatPusher } from '@/hooks/usePusher';
 
 interface Message {
   id: string;
@@ -36,14 +37,90 @@ export default function ChatPage({ params }: { params: Promise<{ matchId: string
   const [reportReason, setReportReason] = useState('');
   const [reportNotes, setReportNotes] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [typingUserName, setTypingUserName] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle new message from Pusher
+  const handleNewMessage = useCallback((message: Message) => {
+    setMessages((prev) => {
+      // Avoid duplicates
+      if (prev.some((m) => m.id === message.id)) return prev;
+      return [...prev, message];
+    });
+  }, []);
+
+  // Handle typing indicators
+  const handleTypingStart = useCallback((userId: string, userName: string) => {
+    setIsOtherTyping(true);
+    setTypingUserName(userName);
+    
+    // Auto-hide after 3 seconds
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsOtherTyping(false);
+    }, 3000);
+  }, []);
+
+  const handleTypingStop = useCallback(() => {
+    setIsOtherTyping(false);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+  }, []);
+
+  // Use Pusher for real-time messaging
+  const { handleTyping, stopTyping } = useChatPusher({
+    matchId,
+    currentUserId,
+    onNewMessage: handleNewMessage,
+    onTypingStart: handleTypingStart,
+    onTypingStop: handleTypingStop,
+  });
+
+  const [isOtherOnline, setIsOtherOnline] = useState(false);
 
   useEffect(() => {
     fetchMessages();
     fetchCurrentUser();
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
+    // Removed polling - now using Pusher for real-time updates
   }, [matchId]);
+
+  // Check online status periodically
+  useEffect(() => {
+    const checkOnlineStatus = async () => {
+      if (!matchInfo?.otherUser.id) return;
+      try {
+        const res = await fetch(`/api/online?userId=${matchInfo.otherUser.id}`);
+        const data = await res.json();
+        setIsOtherOnline(data.isOnline);
+      } catch (error) {
+        console.error('Failed to check online status:', error);
+      }
+    };
+
+    checkOnlineStatus();
+    const interval = setInterval(checkOnlineStatus, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [matchInfo?.otherUser.id]);
+
+  // Update own online status
+  useEffect(() => {
+    const updateOnlineStatus = async () => {
+      try {
+        await fetch('/api/online', { method: 'POST' });
+      } catch (error) {
+        console.error('Failed to update online status:', error);
+      }
+    };
+
+    updateOnlineStatus();
+    const interval = setInterval(updateOnlineStatus, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -93,6 +170,9 @@ export default function ChatPage({ params }: { params: Promise<{ matchId: string
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
 
+    // Stop typing indicator when sending
+    stopTyping();
+    
     setSending(true);
     try {
       const res = await fetch(`/api/messages/${matchId}`, {
@@ -110,6 +190,14 @@ export default function ChatPage({ params }: { params: Promise<{ matchId: string
       console.error('Failed to send message:', error);
     } finally {
       setSending(false);
+    }
+  };
+
+  // Handle input change with typing indicator
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    if (e.target.value.trim()) {
+      handleTyping();
     }
   };
 
@@ -168,20 +256,31 @@ export default function ChatPage({ params }: { params: Promise<{ matchId: string
           <ChevronLeft className="w-6 h-6" />
         </button>
         <div className="flex items-center gap-3 flex-1">
-          <div className="w-10 h-10 rounded-full overflow-hidden">
-            {matchInfo?.otherUser.photo ? (
-              <img
-                src={matchInfo.otherUser.photo}
-                alt={matchInfo.otherUser.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-coral-100 flex items-center justify-center">
-                <span className="text-lg">👤</span>
-              </div>
+          <div className="relative">
+            <div className="w-10 h-10 rounded-full overflow-hidden">
+              {matchInfo?.otherUser.photo ? (
+                <img
+                  src={matchInfo.otherUser.photo}
+                  alt={matchInfo.otherUser.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full bg-coral-100 flex items-center justify-center">
+                  <span className="text-lg">👤</span>
+                </div>
+              )}
+            </div>
+            {/* Online indicator */}
+            {isOtherOnline && (
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
             )}
           </div>
-          <h1 className="font-semibold text-gray-900">{matchInfo?.otherUser.name}</h1>
+          <div>
+            <h1 className="font-semibold text-gray-900">{matchInfo?.otherUser.name}</h1>
+            {isOtherOnline && (
+              <p className="text-xs text-green-500">Online</p>
+            )}
+          </div>
         </div>
         <div className="relative">
           <button onClick={() => setShowMenu(!showMenu)} className="p-2">
@@ -247,13 +346,27 @@ export default function ChatPage({ params }: { params: Promise<{ matchId: string
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Typing Indicator */}
+      {isOtherTyping && (
+        <div className="px-4 py-2 bg-gray-50">
+          <div className="flex items-center gap-2 text-gray-500 text-sm">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <span>{typingUserName || matchInfo?.otherUser.name} is typing...</span>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <form onSubmit={sendMessage} className="p-4 border-t border-gray-100 safe-area-bottom">
         <div className="flex items-center gap-2">
           <input
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={handleInputChange}
             placeholder="Type a message..."
             className="flex-1 px-4 py-3 rounded-full border border-gray-200 focus:border-coral-500 focus:ring-2 focus:ring-coral-500/20 outline-none"
           />

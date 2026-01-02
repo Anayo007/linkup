@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import pusherServer, { getUserChannel, PUSHER_EVENTS } from '@/lib/pusher';
 
 // Like limits by subscription tier
 const LIKE_LIMITS = {
@@ -103,6 +104,45 @@ export async function POST(request: NextRequest) {
       match = await prisma.match.create({
         data: { user1Id, user2Id },
       });
+
+      // Get both users' profiles for the notification
+      const [currentUserProfile, otherUserProfile] = await Promise.all([
+        prisma.profile.findUnique({
+          where: { userId: user.id },
+          select: { name: true },
+        }),
+        prisma.profile.findUnique({
+          where: { userId: toUserId },
+          select: { name: true },
+        }),
+      ]);
+
+      const [currentUserPhoto, otherUserPhoto] = await Promise.all([
+        prisma.photo.findFirst({
+          where: { userId: user.id },
+          orderBy: { position: 'asc' },
+          select: { url: true },
+        }),
+        prisma.photo.findFirst({
+          where: { userId: toUserId },
+          orderBy: { position: 'asc' },
+          select: { url: true },
+        }),
+      ]);
+
+      // Notify both users about the new match
+      await Promise.all([
+        pusherServer.trigger(getUserChannel(user.id), PUSHER_EVENTS.NEW_MATCH, {
+          matchId: match.id,
+          userName: otherUserProfile?.name || 'Someone',
+          userPhoto: otherUserPhoto?.url || '',
+        }),
+        pusherServer.trigger(getUserChannel(toUserId), PUSHER_EVENTS.NEW_MATCH, {
+          matchId: match.id,
+          userName: currentUserProfile?.name || 'Someone',
+          userPhoto: currentUserPhoto?.url || '',
+        }),
+      ]);
     }
 
     return NextResponse.json({ 
