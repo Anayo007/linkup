@@ -21,6 +21,15 @@ model User {
   createdAt     DateTime  @default(now())
   lastActive    DateTime  @default(now())
   
+  // Subscription
+  subscriptionTier    String    @default("free") // free, plus, premium
+  subscriptionStatus  String    @default("active") // active, cancelled, expired
+  subscriptionStart   DateTime?
+  subscriptionEnd     DateTime?
+  dailyLikesUsed      Int       @default(0)
+  dailyLikesResetAt   DateTime  @default(now())
+  dailyUndosUsed      Int       @default(0)
+  
   profile       Profile?
   photos        Photo[]
   promptAnswers PromptAnswer[]
