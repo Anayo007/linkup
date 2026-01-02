@@ -1,9 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Check, RefreshCw } from 'lucide-react';
+
+// Generate a simple math question
+function generateMathQuestion() {
+  const operations = ['+', '-', '×'];
+  const operation = operations[Math.floor(Math.random() * operations.length)];
+  let num1: number, num2: number, answer: number;
+
+  switch (operation) {
+    case '+':
+      num1 = Math.floor(Math.random() * 10) + 1;
+      num2 = Math.floor(Math.random() * 10) + 1;
+      answer = num1 + num2;
+      break;
+    case '-':
+      num1 = Math.floor(Math.random() * 10) + 5;
+      num2 = Math.floor(Math.random() * num1);
+      answer = num1 - num2;
+      break;
+    case '×':
+      num1 = Math.floor(Math.random() * 5) + 1;
+      num2 = Math.floor(Math.random() * 5) + 1;
+      answer = num1 * num2;
+      break;
+    default:
+      num1 = 1;
+      num2 = 1;
+      answer = 2;
+  }
+
+  return { question: `${num1} ${operation} ${num2}`, answer };
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -13,6 +44,19 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Math captcha state
+  const [mathQuestion, setMathQuestion] = useState({ question: '', answer: 0 });
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+
+  useEffect(() => {
+    setMathQuestion(generateMathQuestion());
+  }, []);
+
+  const refreshCaptcha = () => {
+    setMathQuestion(generateMathQuestion());
+    setCaptchaAnswer('');
+  };
 
   const passwordRequirements = [
     { met: password.length >= 8, text: 'At least 8 characters' },
@@ -31,6 +75,13 @@ export default function SignupPage() {
 
     if (!passwordRequirements.every(r => r.met)) {
       setError('Please meet all password requirements');
+      return;
+    }
+
+    // Verify captcha
+    if (parseInt(captchaAnswer) !== mathQuestion.answer) {
+      setError('Incorrect answer to the math question. Please try again.');
+      refreshCaptcha();
       return;
     }
 
@@ -139,6 +190,36 @@ export default function SignupPage() {
                 placeholder="••••••••"
                 required
               />
+            </div>
+
+            {/* Math Captcha */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Verify you&apos;re human
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-gradient-to-r from-coral-50 to-orange-50 border border-coral-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <span className="text-lg font-semibold text-gray-800">
+                    {mathQuestion.question} = ?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={refreshCaptcha}
+                    className="p-1 text-coral-500 hover:text-coral-600 hover:bg-coral-100 rounded-lg transition-colors"
+                    title="Get a new question"
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </button>
+                </div>
+                <input
+                  type="number"
+                  value={captchaAnswer}
+                  onChange={(e) => setCaptchaAnswer(e.target.value)}
+                  className="w-24 px-4 py-3 rounded-xl border border-gray-200 focus:border-coral-500 focus:ring-2 focus:ring-coral-500/20 outline-none transition-all text-center text-lg font-semibold"
+                  placeholder="?"
+                  required
+                />
+              </div>
             </div>
 
             <button

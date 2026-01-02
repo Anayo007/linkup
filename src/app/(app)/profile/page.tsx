@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Edit2, Camera, Plus, X, Loader2, MapPin, Briefcase, GraduationCap } from 'lucide-react';
+import { Settings, Edit2, Camera, Plus, X, Loader2, MapPin, Briefcase, GraduationCap, LogOut } from 'lucide-react';
 
 interface Photo {
   id: string;
@@ -219,14 +219,26 @@ export default function ProfilePage() {
           <button
             onClick={() => setEditing(!editing)}
             className="p-2 text-gray-500 hover:text-gray-700"
+            title="Edit profile"
           >
             <Edit2 className="w-5 h-5" />
           </button>
           <button
             onClick={() => router.push('/settings')}
             className="p-2 text-gray-500 hover:text-gray-700"
+            title="Settings"
           >
             <Settings className="w-5 h-5" />
+          </button>
+          <button
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' });
+              router.push('/');
+            }}
+            className="p-2 text-gray-500 hover:text-red-500"
+            title="Sign out"
+          >
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
       </div>
