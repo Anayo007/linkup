@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, Heart, Flag, AlertTriangle, Check, X, Ban, Loader2, Search, Shield, ShieldOff, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Heart, Flag, AlertTriangle, Check, X, Ban, Loader2, Search, Shield, ShieldOff, Trash2, ChevronLeft, ChevronRight, Settings, CreditCard, MessageSquare, Plus, Edit2, ToggleLeft, ToggleRight, Save } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 
 interface Stats {
@@ -12,6 +12,63 @@ interface Stats {
   matchesToday: number;
   openReports: number;
   reportsToday: number;
+}
+
+interface AppSettings {
+  plusMonthlyPrice: number;
+  plusYearlyPrice: number;
+  premiumMonthlyPrice: number;
+  premiumYearlyPrice: number;
+  freeDailyLikes: number;
+  freeUndosPerDay: number;
+  plusDailyLikes: number;
+  plusUndosPerDay: number;
+  premiumDailyLikes: number;
+  premiumUndosPerDay: number;
+  maxDiscoveryDistance: number;
+  minAge: number;
+  maxAge: number;
+  minPhotos: number;
+  maxPhotos: number;
+  minPrompts: number;
+  maxPrompts: number;
+  maxBioLength: number;
+  maxPromptAnswerLength: number;
+  autoFlagKeywords: string;
+  maxReportsBeforeReview: number;
+  enablePhoneAuth: boolean;
+  enableSocialAuth: boolean;
+  enableImageMessages: boolean;
+  maintenanceMode: boolean;
+}
+
+interface SubscriptionTier {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  dailyLikes: number;
+  dailyUndos: number;
+  seeWhoLikesYou: boolean;
+  advancedFilters: boolean;
+  readReceipts: boolean;
+  prioritySupport: boolean;
+  profileBoost: boolean;
+  noAds: boolean;
+  badgeColor: string | null;
+  badgeIcon: string | null;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface Prompt {
+  id: string;
+  text: string;
+  category: string;
+  isActive: boolean;
+  _count: { answers: number };
 }
 
 interface Report {
@@ -57,7 +114,7 @@ interface Pagination {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'reports' | 'pricing' | 'prompts' | 'settings'>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -69,6 +126,16 @@ export default function AdminDashboard() {
   const [processing, setProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Settings state
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
+  const [tiers, setTiers] = useState<SubscriptionTier[]>([]);
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [editingTier, setEditingTier] = useState<SubscriptionTier | null>(null);
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
+  const [newPrompt, setNewPrompt] = useState({ text: '', category: 'fun' });
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -78,7 +145,136 @@ export default function AdminDashboard() {
     if (activeTab === 'users') {
       fetchUsers(1);
     }
+    if (activeTab === 'pricing' || activeTab === 'settings') {
+      fetchSettings();
+    }
+    if (activeTab === 'prompts') {
+      fetchPrompts();
+    }
   }, [activeTab, statusFilter]);
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/admin/settings');
+      if (res.ok) {
+        const data = await res.json();
+        setAppSettings(data.settings);
+        setTiers(data.tiers);
+      }
+    } catch (error) {
+      console.error('Failed to fetch settings:', error);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const fetchPrompts = async () => {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/admin/prompts');
+      if (res.ok) {
+        const data = await res.json();
+        setPrompts(data.prompts);
+      }
+    } catch (error) {
+      console.error('Failed to fetch prompts:', error);
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const saveSettings = async (data: Partial<AppSettings>) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'settings', data }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setAppSettings(result.settings);
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveTier = async (tier: SubscriptionTier) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'tier', data: tier }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setTiers(tiers.map(t => t.id === result.tier.id ? result.tier : t));
+        setEditingTier(null);
+      }
+    } catch (error) {
+      console.error('Failed to save tier:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createPrompt = async () => {
+    if (!newPrompt.text.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPrompt),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setPrompts([...prompts, { ...result.prompt, _count: { answers: 0 } }]);
+        setNewPrompt({ text: '', category: 'fun' });
+      }
+    } catch (error) {
+      console.error('Failed to create prompt:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updatePrompt = async (prompt: Prompt) => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/prompts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prompt),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setPrompts(prompts.map(p => p.id === result.prompt.id ? { ...result.prompt, _count: p._count } : p));
+        setEditingPrompt(null);
+      }
+    } catch (error) {
+      console.error('Failed to update prompt:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePrompt = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this prompt?')) return;
+    try {
+      const res = await fetch(`/api/admin/prompts?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setPrompts(prompts.filter(p => p.id !== id));
+      }
+    } catch (error) {
+      console.error('Failed to delete prompt:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -226,7 +422,7 @@ export default function AdminDashboard() {
           </div>
           
           {/* Tabs */}
-          <div className="flex gap-1 mt-6">
+          <div className="flex gap-1 mt-6 flex-wrap">
             <button
               onClick={() => setActiveTab('overview')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -260,6 +456,39 @@ export default function AdminDashboard() {
                   {openReports.length}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('pricing')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'pricing'
+                  ? 'bg-coral-500 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              Pricing
+            </button>
+            <button
+              onClick={() => setActiveTab('prompts')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'prompts'
+                  ? 'bg-coral-500 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              Prompts
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'settings'
+                  ? 'bg-coral-500 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              Settings
             </button>
           </div>
         </div>
@@ -613,7 +842,601 @@ export default function AdminDashboard() {
             )}
           </>
         )}
+
+        {/* Pricing Tab */}
+        {activeTab === 'pricing' && (
+          <>
+            {settingsLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <h2 className="text-xl font-bold text-gray-900">Subscription Tiers</h2>
+                
+                <div className="grid gap-6 md:grid-cols-3">
+                  {tiers.map((tier) => (
+                    <div key={tier.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                      <div className={`p-4 ${tier.name === 'premium' ? 'bg-gradient-to-r from-amber-400 to-orange-500' : tier.name === 'plus' ? 'bg-gradient-to-r from-blue-400 to-blue-600' : 'bg-gray-100'}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            {tier.badgeIcon && <span className="text-2xl">{tier.badgeIcon}</span>}
+                            <h3 className={`text-lg font-bold ${tier.name === 'free' ? 'text-gray-900' : 'text-white'}`}>
+                              {tier.displayName}
+                            </h3>
+                          </div>
+                          <button
+                            onClick={() => setEditingTier(tier)}
+                            className={`p-2 rounded-lg ${tier.name === 'free' ? 'hover:bg-gray-200' : 'hover:bg-white/20'}`}
+                          >
+                            <Edit2 className={`w-4 h-4 ${tier.name === 'free' ? 'text-gray-600' : 'text-white'}`} />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4 space-y-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Monthly Price</p>
+                          <p className="text-2xl font-bold text-gray-900">
+                            {tier.monthlyPrice === 0 ? 'Free' : `£${(tier.monthlyPrice / 100).toFixed(2)}`}
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <p className="text-sm text-gray-500">Yearly Price</p>
+                          <p className="text-lg font-semibold text-gray-700">
+                            {tier.yearlyPrice === 0 ? 'Free' : `£${(tier.yearlyPrice / 100).toFixed(2)}/year`}
+                          </p>
+                        </div>
+                        
+                        <div className="border-t pt-4 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Daily Likes</span>
+                            <span className="font-medium">{tier.dailyLikes === -1 ? 'Unlimited' : tier.dailyLikes}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Daily Undos</span>
+                            <span className="font-medium">{tier.dailyUndos === -1 ? 'Unlimited' : tier.dailyUndos}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="border-t pt-4 space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            {tier.seeWhoLikesYou ? <Check className="w-4 h-4 text-green-500" /> : <X className="w-4 h-4 text-gray-300" />}
+                            <span className={tier.seeWhoLikesYou ? 'text-gray-900' : 'text-gray-400'}>See who likes you</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            {tier.advancedFilters ? <Check className="w-4 h-4 text-green-500" /> : <X className="w-4 h-4 text-gray-300" />}
+                            <span className={tier.advancedFilters ? 'text-gray-900' : 'text-gray-400'}>Advanced filters</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            {tier.readReceipts ? <Check className="w-4 h-4 text-green-500" /> : <X className="w-4 h-4 text-gray-300" />}
+                            <span className={tier.readReceipts ? 'text-gray-900' : 'text-gray-400'}>Read receipts</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            {tier.profileBoost ? <Check className="w-4 h-4 text-green-500" /> : <X className="w-4 h-4 text-gray-300" />}
+                            <span className={tier.profileBoost ? 'text-gray-900' : 'text-gray-400'}>Profile boost</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            {tier.noAds ? <Check className="w-4 h-4 text-green-500" /> : <X className="w-4 h-4 text-gray-300" />}
+                            <span className={tier.noAds ? 'text-gray-900' : 'text-gray-400'}>No ads</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Prompts Tab */}
+        {activeTab === 'prompts' && (
+          <>
+            {settingsLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Add New Prompt */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Add New Prompt</h3>
+                  <div className="flex gap-4">
+                    <input
+                      type="text"
+                      value={newPrompt.text}
+                      onChange={(e) => setNewPrompt({ ...newPrompt, text: e.target.value })}
+                      placeholder="Enter prompt text..."
+                      className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:border-coral-500 focus:ring-2 focus:ring-coral-500/20 outline-none"
+                    />
+                    <select
+                      value={newPrompt.category}
+                      onChange={(e) => setNewPrompt({ ...newPrompt, category: e.target.value })}
+                      className="px-4 py-2 border border-gray-200 rounded-xl focus:border-coral-500 outline-none"
+                    >
+                      <option value="fun">Fun</option>
+                      <option value="values">Values</option>
+                      <option value="lifestyle">Lifestyle</option>
+                      <option value="relationship">Relationship</option>
+                    </select>
+                    <button
+                      onClick={createPrompt}
+                      disabled={saving || !newPrompt.text.trim()}
+                      className="px-6 py-2 bg-coral-500 text-white rounded-xl font-medium hover:bg-coral-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* Prompts List by Category */}
+                {['fun', 'values', 'lifestyle', 'relationship'].map((category) => {
+                  const categoryPrompts = prompts.filter(p => p.category === category);
+                  if (categoryPrompts.length === 0) return null;
+                  
+                  return (
+                    <div key={category} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                      <div className="p-4 border-b border-gray-100 bg-gray-50">
+                        <h3 className="font-semibold text-gray-900 capitalize">{category} ({categoryPrompts.length})</h3>
+                      </div>
+                      <div className="divide-y divide-gray-100">
+                        {categoryPrompts.map((prompt) => (
+                          <div key={prompt.id} className="p-4 flex items-center gap-4">
+                            <div className="flex-1">
+                              <p className={`text-gray-900 ${!prompt.isActive ? 'line-through opacity-50' : ''}`}>
+                                {prompt.text}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {prompt._count.answers} answers
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => updatePrompt({ ...prompt, isActive: !prompt.isActive })}
+                                className={`p-2 rounded-lg ${prompt.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                                title={prompt.isActive ? 'Deactivate' : 'Activate'}
+                              >
+                                {prompt.isActive ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                              </button>
+                              <button
+                                onClick={() => setEditingPrompt(prompt)}
+                                className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => deletePrompt(prompt.id)}
+                                className="p-2 rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <>
+            {settingsLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-coral-500" />
+              </div>
+            ) : appSettings && (
+              <div className="space-y-6">
+                {/* Profile Settings */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Profile Settings</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Min Photos</label>
+                      <input
+                        type="number"
+                        value={appSettings.minPhotos}
+                        onChange={(e) => setAppSettings({ ...appSettings, minPhotos: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Max Photos</label>
+                      <input
+                        type="number"
+                        value={appSettings.maxPhotos}
+                        onChange={(e) => setAppSettings({ ...appSettings, maxPhotos: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Min Prompts</label>
+                      <input
+                        type="number"
+                        value={appSettings.minPrompts}
+                        onChange={(e) => setAppSettings({ ...appSettings, minPrompts: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Max Prompts</label>
+                      <input
+                        type="number"
+                        value={appSettings.maxPrompts}
+                        onChange={(e) => setAppSettings({ ...appSettings, maxPrompts: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Max Bio Length</label>
+                      <input
+                        type="number"
+                        value={appSettings.maxBioLength}
+                        onChange={(e) => setAppSettings({ ...appSettings, maxBioLength: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Max Prompt Answer</label>
+                      <input
+                        type="number"
+                        value={appSettings.maxPromptAnswerLength}
+                        onChange={(e) => setAppSettings({ ...appSettings, maxPromptAnswerLength: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Discovery Settings */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Discovery Settings</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Max Distance (km)</label>
+                      <input
+                        type="number"
+                        value={appSettings.maxDiscoveryDistance}
+                        onChange={(e) => setAppSettings({ ...appSettings, maxDiscoveryDistance: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Min Age</label>
+                      <input
+                        type="number"
+                        value={appSettings.minAge}
+                        onChange={(e) => setAppSettings({ ...appSettings, minAge: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Max Age</label>
+                      <input
+                        type="number"
+                        value={appSettings.maxAge}
+                        onChange={(e) => setAppSettings({ ...appSettings, maxAge: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Safety Settings */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Safety Settings</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-500 mb-1">Auto-flag Keywords (comma-separated)</label>
+                      <input
+                        type="text"
+                        value={appSettings.autoFlagKeywords}
+                        onChange={(e) => setAppSettings({ ...appSettings, autoFlagKeywords: e.target.value })}
+                        placeholder="spam, scam, inappropriate..."
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                    <div className="w-48">
+                      <label className="block text-sm text-gray-500 mb-1">Reports Before Auto-Review</label>
+                      <input
+                        type="number"
+                        value={appSettings.maxReportsBeforeReview}
+                        onChange={(e) => setAppSettings({ ...appSettings, maxReportsBeforeReview: parseInt(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Feature Flags */}
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Feature Flags</h3>
+                  <div className="space-y-4">
+                    <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer">
+                      <div>
+                        <p className="font-medium text-gray-900">Phone Authentication</p>
+                        <p className="text-sm text-gray-500">Allow users to sign up with phone number</p>
+                      </div>
+                      <button
+                        onClick={() => setAppSettings({ ...appSettings, enablePhoneAuth: !appSettings.enablePhoneAuth })}
+                        className={`p-1 rounded-full ${appSettings.enablePhoneAuth ? 'bg-green-500' : 'bg-gray-300'}`}
+                      >
+                        {appSettings.enablePhoneAuth ? <ToggleRight className="w-6 h-6 text-white" /> : <ToggleLeft className="w-6 h-6 text-white" />}
+                      </button>
+                    </label>
+                    
+                    <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer">
+                      <div>
+                        <p className="font-medium text-gray-900">Social Login</p>
+                        <p className="text-sm text-gray-500">Allow Google/Apple sign in</p>
+                      </div>
+                      <button
+                        onClick={() => setAppSettings({ ...appSettings, enableSocialAuth: !appSettings.enableSocialAuth })}
+                        className={`p-1 rounded-full ${appSettings.enableSocialAuth ? 'bg-green-500' : 'bg-gray-300'}`}
+                      >
+                        {appSettings.enableSocialAuth ? <ToggleRight className="w-6 h-6 text-white" /> : <ToggleLeft className="w-6 h-6 text-white" />}
+                      </button>
+                    </label>
+                    
+                    <label className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer">
+                      <div>
+                        <p className="font-medium text-gray-900">Image Messages</p>
+                        <p className="text-sm text-gray-500">Allow sending images in chat</p>
+                      </div>
+                      <button
+                        onClick={() => setAppSettings({ ...appSettings, enableImageMessages: !appSettings.enableImageMessages })}
+                        className={`p-1 rounded-full ${appSettings.enableImageMessages ? 'bg-green-500' : 'bg-gray-300'}`}
+                      >
+                        {appSettings.enableImageMessages ? <ToggleRight className="w-6 h-6 text-white" /> : <ToggleLeft className="w-6 h-6 text-white" />}
+                      </button>
+                    </label>
+                    
+                    <label className="flex items-center justify-between p-3 bg-red-50 rounded-xl cursor-pointer">
+                      <div>
+                        <p className="font-medium text-red-900">Maintenance Mode</p>
+                        <p className="text-sm text-red-600">Disable app for all users</p>
+                      </div>
+                      <button
+                        onClick={() => setAppSettings({ ...appSettings, maintenanceMode: !appSettings.maintenanceMode })}
+                        className={`p-1 rounded-full ${appSettings.maintenanceMode ? 'bg-red-500' : 'bg-gray-300'}`}
+                      >
+                        {appSettings.maintenanceMode ? <ToggleRight className="w-6 h-6 text-white" /> : <ToggleLeft className="w-6 h-6 text-white" />}
+                      </button>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => saveSettings(appSettings)}
+                    disabled={saving}
+                    className="px-8 py-3 bg-coral-500 text-white rounded-xl font-medium hover:bg-coral-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                    Save Settings
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {/* Edit Tier Modal */}
+      {editingTier && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Edit {editingTier.displayName}</h2>
+              <button onClick={() => setEditingTier(null)} className="p-2">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                <input
+                  type="text"
+                  value={editingTier.displayName}
+                  onChange={(e) => setEditingTier({ ...editingTier, displayName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <input
+                  type="text"
+                  value={editingTier.description || ''}
+                  onChange={(e) => setEditingTier({ ...editingTier, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Price (pence)</label>
+                  <input
+                    type="number"
+                    value={editingTier.monthlyPrice}
+                    onChange={(e) => setEditingTier({ ...editingTier, monthlyPrice: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">= £{(editingTier.monthlyPrice / 100).toFixed(2)}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Yearly Price (pence)</label>
+                  <input
+                    type="number"
+                    value={editingTier.yearlyPrice}
+                    onChange={(e) => setEditingTier({ ...editingTier, yearlyPrice: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">= £{(editingTier.yearlyPrice / 100).toFixed(2)}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Daily Likes (-1 = unlimited)</label>
+                  <input
+                    type="number"
+                    value={editingTier.dailyLikes}
+                    onChange={(e) => setEditingTier({ ...editingTier, dailyLikes: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Daily Undos (-1 = unlimited)</label>
+                  <input
+                    type="number"
+                    value={editingTier.dailyUndos}
+                    onChange={(e) => setEditingTier({ ...editingTier, dailyUndos: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                  />
+                </div>
+              </div>
+              
+              <div className="border-t pt-4 space-y-3">
+                <p className="text-sm font-medium text-gray-700">Features</p>
+                {[
+                  { key: 'seeWhoLikesYou', label: 'See who likes you' },
+                  { key: 'advancedFilters', label: 'Advanced filters' },
+                  { key: 'readReceipts', label: 'Read receipts' },
+                  { key: 'prioritySupport', label: 'Priority support' },
+                  { key: 'profileBoost', label: 'Profile boost' },
+                  { key: 'noAds', label: 'No ads' },
+                ].map(({ key, label }) => (
+                  <label key={key} className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingTier[key as keyof SubscriptionTier] as boolean}
+                      onChange={(e) => setEditingTier({ ...editingTier, [key]: e.target.checked })}
+                      className="w-4 h-4 text-coral-500 rounded focus:ring-coral-500"
+                    />
+                    <span className="text-gray-700">{label}</span>
+                  </label>
+                ))}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Badge Icon (emoji)</label>
+                  <input
+                    type="text"
+                    value={editingTier.badgeIcon || ''}
+                    onChange={(e) => setEditingTier({ ...editingTier, badgeIcon: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Badge Color (hex)</label>
+                  <input
+                    type="text"
+                    value={editingTier.badgeColor || ''}
+                    onChange={(e) => setEditingTier({ ...editingTier, badgeColor: e.target.value })}
+                    placeholder="#F59E0B"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-100 flex gap-3">
+              <button
+                onClick={() => setEditingTier(null)}
+                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => saveTier(editingTier)}
+                disabled={saving}
+                className="flex-1 py-3 rounded-xl bg-coral-500 text-white font-medium hover:bg-coral-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Prompt Modal */}
+      {editingPrompt && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Edit Prompt</h2>
+              <button onClick={() => setEditingPrompt(null)} className="p-2">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prompt Text</label>
+                <textarea
+                  value={editingPrompt.text}
+                  onChange={(e) => setEditingPrompt({ ...editingPrompt, text: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none resize-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  value={editingPrompt.category}
+                  onChange={(e) => setEditingPrompt({ ...editingPrompt, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-coral-500 outline-none"
+                >
+                  <option value="fun">Fun</option>
+                  <option value="values">Values</option>
+                  <option value="lifestyle">Lifestyle</option>
+                  <option value="relationship">Relationship</option>
+                </select>
+              </div>
+              
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editingPrompt.isActive}
+                  onChange={(e) => setEditingPrompt({ ...editingPrompt, isActive: e.target.checked })}
+                  className="w-4 h-4 text-coral-500 rounded focus:ring-coral-500"
+                />
+                <span className="text-gray-700">Active</span>
+              </label>
+            </div>
+            
+            <div className="p-6 border-t border-gray-100 flex gap-3">
+              <button
+                onClick={() => setEditingPrompt(null)}
+                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => updatePrompt(editingPrompt)}
+                disabled={saving}
+                className="flex-1 py-3 rounded-xl bg-coral-500 text-white font-medium hover:bg-coral-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Report Detail Modal */}
       {selectedReport && (

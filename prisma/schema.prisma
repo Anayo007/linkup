@@ -191,3 +191,83 @@ model Skip {
   
   @@unique([skipperId, skippedId])
 }
+
+model AppSettings {
+  id        String   @id @default("app_settings")
+  
+  // Subscription Pricing (in pence/cents)
+  plusMonthlyPrice     Int      @default(1499)  // £14.99
+  plusYearlyPrice      Int      @default(9999)  // £99.99
+  premiumMonthlyPrice  Int      @default(2999)  // £29.99
+  premiumYearlyPrice   Int      @default(19999) // £199.99
+  
+  // Free Tier Limits
+  freeDailyLikes       Int      @default(10)
+  freeUndosPerDay      Int      @default(0)
+  
+  // Plus Tier Limits
+  plusDailyLikes       Int      @default(50)
+  plusUndosPerDay      Int      @default(5)
+  
+  // Premium Tier Limits (unlimited = -1)
+  premiumDailyLikes    Int      @default(-1)
+  premiumUndosPerDay   Int      @default(-1)
+  
+  // Discovery Settings
+  maxDiscoveryDistance Int      @default(100)   // km
+  minAge               Int      @default(18)
+  maxAge               Int      @default(100)
+  
+  // Profile Settings
+  minPhotos            Int      @default(3)
+  maxPhotos            Int      @default(6)
+  minPrompts           Int      @default(3)
+  maxPrompts           Int      @default(6)
+  maxBioLength         Int      @default(500)
+  maxPromptAnswerLength Int     @default(300)
+  
+  // Safety Settings
+  autoFlagKeywords     String   @default("")    // Comma-separated
+  maxReportsBeforeReview Int    @default(3)
+  
+  // Feature Flags
+  enablePhoneAuth      Boolean  @default(false)
+  enableSocialAuth     Boolean  @default(false)
+  enableImageMessages  Boolean  @default(true)
+  maintenanceMode      Boolean  @default(false)
+  
+  updatedAt DateTime @updatedAt
+}
+
+model SubscriptionTier {
+  id          String   @id @default(uuid())
+  name        String   @unique  // free, plus, premium
+  displayName String
+  description String?
+  
+  // Pricing (in pence/cents)
+  monthlyPrice Int     @default(0)
+  yearlyPrice  Int     @default(0)
+  
+  // Limits (-1 = unlimited)
+  dailyLikes   Int     @default(10)
+  dailyUndos   Int     @default(0)
+  
+  // Features
+  seeWhoLikesYou    Boolean @default(false)
+  advancedFilters   Boolean @default(false)
+  readReceipts      Boolean @default(false)
+  prioritySupport   Boolean @default(false)
+  profileBoost      Boolean @default(false)
+  noAds             Boolean @default(false)
+  
+  // Badge/styling
+  badgeColor   String?
+  badgeIcon    String?
+  
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
