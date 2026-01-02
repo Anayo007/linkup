@@ -72,22 +72,48 @@ export default function LandingPage() {
         <div className="max-w-md mx-auto">
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-[3rem] p-3 shadow-2xl">
             <div className="bg-white rounded-[2.5rem] overflow-hidden">
-              <div className="bg-gray-100 px-6 py-4 flex items-center justify-between">
-                <span className="font-semibold text-gray-900">Sarah, 28</span>
-                <span className="text-sm text-gray-500">2 miles away</span>
+              {/* Phone notch */}
+              <div className="bg-black h-7 flex items-center justify-center">
+                <div className="w-20 h-5 bg-black rounded-b-xl"></div>
               </div>
-              <div className="aspect-[3/4] bg-gradient-to-br from-coral-100 to-coral-200 flex items-center justify-center">
-                <div className="text-center p-8">
-                  <div className="w-32 h-32 bg-coral-300 rounded-full mx-auto mb-4 flex items-center justify-center">
-                    <span className="text-4xl">👩</span>
+              {/* Profile header overlay */}
+              <div className="relative">
+                <img 
+                  src="/images/couple-hero.jpg" 
+                  alt="Happy couple enjoying time together"
+                  className="w-full aspect-[3/4] object-cover"
+                />
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+                
+                {/* Top bar */}
+                <div className="absolute top-0 left-0 right-0 px-4 py-3 flex items-center justify-between">
+                  <div className="flex gap-1">
+                    <div className="w-16 h-1 bg-white rounded-full"></div>
+                    <div className="w-16 h-1 bg-white/40 rounded-full"></div>
+                    <div className="w-16 h-1 bg-white/40 rounded-full"></div>
                   </div>
-                  <p className="text-gray-700 font-medium">Profile Photo</p>
                 </div>
+                
+                {/* Profile info */}
+                <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+                  <h3 className="text-2xl font-bold mb-1">Sarah, 26</h3>
+                  <p className="text-white/90 flex items-center gap-1 text-sm">
+                    <span>📍</span> 2 miles away • London
+                  </p>
+                </div>
+                
+                {/* Like button on photo */}
+                <button className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm p-3 rounded-full shadow-lg">
+                  <Heart className="w-6 h-6 text-coral-500" />
+                </button>
               </div>
-              <div className="p-6 space-y-4">
+              
+              {/* Prompt card */}
+              <div className="p-4">
                 <div className="bg-coral-50 rounded-2xl p-4 border-2 border-coral-200">
                   <p className="text-sm text-coral-600 font-medium mb-1">My ideal first date is...</p>
-                  <p className="text-gray-900">&quot;A cozy coffee shop, good conversation, and seeing where it goes&quot;</p>
+                  <p className="text-gray-900">&quot;A picnic in the park with good food and even better conversation&quot;</p>
                   <button className="mt-3 flex items-center gap-2 text-coral-500 font-medium text-sm">
                     <Heart className="w-4 h-4" /> Like this answer
                   </button>
