@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 
+// Like limits by subscription tier
+const LIKE_LIMITS = {
+  free: 10,
+  plus: Infinity,
+  premium: Infinity,
+};
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -15,6 +22,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Get full user data with subscription info
+    const fullUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        subscriptionTier: true,
+        dailyLikesUsed: true,
+        dailyLikesResetAt: true,
+      },
+    });
+
+    if (!fullUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Check if daily likes need to be reset (new day)
+    const now = new Date();
+    const resetAt = new Date(fullUser.dailyLikesResetAt);
+    const isNewDay = now.toDateString() !== resetAt.toDateString();
+
+    let dailyLikesUsed = isNewDay ? 0 : fullUser.dailyLikesUsed;
+
+    // Check like limit for free users
+    const tier = fullUser.subscriptionTier as keyof typeof LIKE_LIMITS;
+    const limit = LIKE_LIMITS[tier] || LIKE_LIMITS.free;
+
+    if (dailyLikesUsed >= limit) {
+      return NextResponse.json({ 
+        error: 'Daily like limit reached',
+        limitReached: true,
+        limit,
+        tier: fullUser.subscriptionTier,
+      }, { status: 429 });
+    }
+
     // Check if already liked
     const existingLike = await prisma.like.findUnique({
       where: {
@@ -26,17 +67,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Already liked this user' }, { status: 400 });
     }
 
-    // Create like
-    const like = await prisma.like.create({
-      data: {
-        fromUserId: user.id,
-        toUserId,
-        targetType,
-        photoId: targetType === 'photo' ? photoId : null,
-        promptAnswerId: targetType === 'prompt' ? promptAnswerId : null,
-        comment,
-      },
-    });
+    // Create like and update daily count
+    const [like] = await prisma.$transaction([
+      prisma.like.create({
+        data: {
+          fromUserId: user.id,
+          toUserId,
+          targetType,
+          photoId: targetType === 'photo' ? photoId : null,
+          promptAnswerId: targetType === 'prompt' ? promptAnswerId : null,
+          comment,
+        },
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: {
+          dailyLikesUsed: isNewDay ? 1 : { increment: 1 },
+          dailyLikesResetAt: isNewDay ? now : undefined,
+        },
+      }),
+    ]);
 
     // Check if mutual like exists (match!)
     const mutualLike = await prisma.like.findUnique({
@@ -59,6 +109,7 @@ export async function POST(request: NextRequest) {
       like, 
       match,
       isMatch: !!match,
+      likesRemaining: limit === Infinity ? null : limit - (dailyLikesUsed + 1),
     });
   } catch (error) {
     console.error('Like error:', error);

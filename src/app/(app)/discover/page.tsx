@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Heart, X, Undo2, MessageCircle, MapPin, Briefcase, GraduationCap, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Heart, X, Undo2, MessageCircle, MapPin, Briefcase, GraduationCap, Loader2, Crown, Sparkles } from 'lucide-react';
 
 interface Photo {
   id: string;
@@ -45,6 +46,9 @@ export default function DiscoverPage() {
   const [likeComment, setLikeComment] = useState('');
   const [matchModal, setMatchModal] = useState<{ name: string; photo?: string } | null>(null);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [likesRemaining, setLikesRemaining] = useState<number | null>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showUndoLimitModal, setShowUndoLimitModal] = useState(false);
 
   useEffect(() => {
     fetchProfiles();
@@ -83,6 +87,13 @@ export default function DiscoverPage() {
   const handleUndo = async () => {
     const res = await fetch('/api/skip', { method: 'DELETE' });
     const data = await res.json();
+    
+    if (res.status === 429) {
+      // Limit reached
+      setShowUndoLimitModal(true);
+      return;
+    }
+    
     if (data.undoneSkipId && currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     }
@@ -112,6 +123,18 @@ export default function DiscoverPage() {
       });
 
       const data = await res.json();
+      
+      if (res.status === 429) {
+        // Daily limit reached
+        setShowLikeModal(false);
+        setShowLimitModal(true);
+        return;
+      }
+      
+      // Update remaining likes
+      if (data.likesRemaining !== undefined) {
+        setLikesRemaining(data.likesRemaining);
+      }
       
       if (data.isMatch) {
         setMatchModal({
@@ -365,6 +388,76 @@ export default function DiscoverPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Like Limit Modal */}
+      {showLimitModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center animate-in">
+            <div className="w-16 h-16 bg-coral-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Heart className="w-8 h-8 text-coral-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Out of likes!</h2>
+            <p className="text-gray-600 mb-6">
+              You&apos;ve used all 10 of your daily likes. Upgrade to LinkUp+ for unlimited likes!
+            </p>
+            <div className="space-y-3">
+              <Link
+                href="/pricing"
+                className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-coral-500 to-orange-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
+              >
+                <Crown className="w-5 h-5" />
+                Get unlimited likes
+              </Link>
+              <button
+                onClick={() => setShowLimitModal(false)}
+                className="w-full py-3 text-gray-600 font-medium hover:text-gray-900"
+              >
+                Come back tomorrow
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Undo Limit Modal */}
+      {showUndoLimitModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full text-center animate-in">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Undo2 className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Undo is a premium feature</h2>
+            <p className="text-gray-600 mb-6">
+              Upgrade to LinkUp+ to undo skips and never miss a potential match!
+            </p>
+            <div className="space-y-3">
+              <Link
+                href="/pricing"
+                className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition-all"
+              >
+                <Sparkles className="w-5 h-5" />
+                Unlock undo
+              </Link>
+              <button
+                onClick={() => setShowUndoLimitModal(false)}
+                className="w-full py-3 text-gray-600 font-medium hover:text-gray-900"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Likes remaining indicator */}
+      {likesRemaining !== null && likesRemaining <= 5 && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-white rounded-full px-4 py-2 shadow-lg z-30 flex items-center gap-2">
+          <Heart className="w-4 h-4 text-coral-500" />
+          <span className="text-sm font-medium text-gray-700">
+            {likesRemaining} likes left today
+          </span>
         </div>
       )}
     </div>

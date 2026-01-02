@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Compass, Heart, MessageCircle, User } from 'lucide-react';
+import { Compass, Heart, Star, MessageCircle, User } from 'lucide-react';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const navItems = [
     { href: '/discover', icon: Compass, label: 'Discover' },
+    { href: '/likes', icon: Star, label: 'Likes' },
     { href: '/matches', icon: Heart, label: 'Matches' },
-    { href: '/messages', icon: MessageCircle, label: 'Messages' },
+    { href: '/messages', icon: MessageCircle, label: 'Chats' },
     { href: '/profile', icon: User, label: 'Profile' },
   ];
 
