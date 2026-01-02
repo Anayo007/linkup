@@ -200,3 +200,4 @@ MIT License - feel free to use this for your own projects!
 
 Built with ❤️ using Next.js, TypeScript, and Tailwind CSS
 
+# Trigger
