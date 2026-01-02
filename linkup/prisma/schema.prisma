@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  phone         String?
+  emailVerified Boolean   @default(false)
+  phoneVerified Boolean   @default(false)
+  isAdmin       Boolean   @default(false)
+  isBanned      Boolean   @default(false)
+  isSuspended   Boolean   @default(false)
+  suspendedUntil DateTime?
+  createdAt     DateTime  @default(now())
+  lastActive    DateTime  @default(now())
+  
+  profile       Profile?
+  photos        Photo[]
+  promptAnswers PromptAnswer[]
+  likesGiven    Like[]    @relation("LikesGiven")
+  likesReceived Like[]    @relation("LikesReceived")
+  matchesAsUser1 Match[]  @relation("MatchUser1")
+  matchesAsUser2 Match[]  @relation("MatchUser2")
+  messagesSent  Message[]
+  blocksGiven   Block[]   @relation("BlocksGiven")
+  blocksReceived Block[]  @relation("BlocksReceived")
+  reportsGiven  Report[]  @relation("ReportsGiven")
+  reportsReceived Report[] @relation("ReportsReceived")
+  skipsGiven    Skip[]    @relation("SkipsGiven")
+  skipsReceived Skip[]    @relation("SkipsReceived")
+}
+
+model Profile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  dob           DateTime
+  gender        String
+  interestedIn  String
+  bio           String?
+  jobTitle      String?
+  company       String?
+  education     String?
+  height        Int?
+  religion      String?
+  drinking      String?
+  smoking       String?
+  locationLat   Float?
+  locationLng   Float?
+  city          String?
+  
+  prefAgeMin    Int      @default(18)
+  prefAgeMax    Int      @default(50)
+  prefDistance  Int      @default(50)
+  prefGender    String?
+  
+  isHidden      Boolean  @default(false)
+  isPaused      Boolean  @default(false)
+  
+  onboardingComplete Boolean @default(false)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Photo {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url       String
+  position  Int
+  createdAt DateTime @default(now())
+  
+  likes     Like[]   @relation("PhotoLikes")
+}
+
+model Prompt {
+  id        String   @id @default(uuid())
+  text      String
+  category  String
+  isActive  Boolean  @default(true)
+  
+  answers   PromptAnswer[]
+}
+
+model PromptAnswer {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promptId  String
+  prompt    Prompt   @relation(fields: [promptId], references: [id])
+  answer    String
+  position  Int
+  createdAt DateTime @default(now())
+  
+  likes     Like[]   @relation("PromptAnswerLikes")
+}
+
+model Like {
+  id            String   @id @default(uuid())
+  fromUserId    String
+  fromUser      User     @relation("LikesGiven", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId      String
+  toUser        User     @relation("LikesReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  targetType    String
+  photoId       String?
+  photo         Photo?   @relation("PhotoLikes", fields: [photoId], references: [id])
+  promptAnswerId String?
+  promptAnswer  PromptAnswer? @relation("PromptAnswerLikes", fields: [promptAnswerId], references: [id])
+  comment       String?
+  createdAt     DateTime @default(now())
+  
+  @@unique([fromUserId, toUserId])
+}
+
+model Match {
+  id            String   @id @default(uuid())
+  user1Id       String
+  user1         User     @relation("MatchUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2Id       String
+  user2         User     @relation("MatchUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  lastMessageAt DateTime?
+  
+  messages      Message[]
+  
+  @@unique([user1Id, user2Id])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text      String
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+}
+
+model Block {
+  id        String   @id @default(uuid())
+  blockerId String
+  blocker   User     @relation("BlocksGiven", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  
+  @@unique([blockerId, blockedId])
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  reporterId  String
+  reporter    User     @relation("ReportsGiven", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedId  String
+  reported    User     @relation("ReportsReceived", fields: [reportedId], references: [id], onDelete: Cascade)
+  reason      String
+  notes       String?
+  status      String   @default("open")
+  adminNotes  String?
+  reviewedAt  DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model Skip {
+  id          String   @id @default(uuid())
+  skipperId   String
+  skipper     User     @relation("SkipsGiven", fields: [skipperId], references: [id], onDelete: Cascade)
+  skippedId   String
+  skipped     User     @relation("SkipsReceived", fields: [skippedId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@unique([skipperId, skippedId])
+}
