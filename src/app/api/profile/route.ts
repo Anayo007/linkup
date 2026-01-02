@@ -58,19 +58,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'You must be 18 or older' }, { status: 400 });
     }
 
+    // Convert height to integer if provided
+    const heightInt = height ? parseInt(height, 10) : null;
+
     // Create or update profile
     const profile = await prisma.profile.upsert({
       where: { userId: user.id },
       update: {
         name, dob: new Date(dob), gender, interestedIn, bio, jobTitle, company,
-        education, height, religion, drinking, smoking, city, locationLat, locationLng,
+        education, height: heightInt, religion, drinking, smoking, city, locationLat, locationLng,
         prefAgeMin: prefAgeMin || 18, prefAgeMax: prefAgeMax || 50,
         prefDistance: prefDistance || 50, prefGender,
         onboardingComplete: true,
       },
       create: {
         userId: user.id, name, dob: new Date(dob), gender, interestedIn, bio,
-        jobTitle, company, education, height, religion, drinking, smoking,
+        jobTitle, company, education, height: heightInt, religion, drinking, smoking,
         city, locationLat, locationLng,
         prefAgeMin: prefAgeMin || 18, prefAgeMax: prefAgeMax || 50,
         prefDistance: prefDistance || 50, prefGender,
@@ -104,9 +107,12 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ profile, message: 'Profile saved successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Save profile error:', error);
-    return NextResponse.json({ error: 'Failed to save profile' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Failed to save profile', 
+      details: error?.message || 'Unknown error' 
+    }, { status: 500 });
   }
 }
 
